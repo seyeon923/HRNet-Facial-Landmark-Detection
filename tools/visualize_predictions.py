@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 from tqdm import tqdm
+from matplotlib.patches import Rectangle
 
 
 def parse_args():
@@ -36,11 +37,19 @@ def main():
     num_imgs = len(dataset_info)
     assert num_imgs == len(preds)
 
-    for img_name, pred in tqdm(zip(dataset_info["image_name"], preds), total=num_imgs):
+    for i in tqdm(range(num_imgs)):
         fig = None
+
+        img_name = dataset_info.loc[i, "image_name"]
+        scale = dataset_info.loc[i, "scale"]
+        cx = dataset_info.loc[i, "center_w"]
+        cy = dataset_info.loc[i, "center_h"]
+
         try:
             img_path = os.path.join(img_root, img_name)
             img = np.array(Image.open(img_path))
+
+            pred = preds[i, :]
 
             fig, ax = plt.subplots()
 
@@ -50,6 +59,13 @@ def main():
             else:
                 ax.imshow(img)
             ax.scatter(pred[:, 0], pred[:, 1], c="green", marker=".")
+
+            w = 200 * scale
+            h = 200 * scale
+            ax.add_patch(Rectangle((cx - w/2, cy - h/2), w, h,
+                         edgecolor="red", facecolor="none"))
+
+            ax.scatter(cx, cy, c="red", marker="*")
 
             save_path = os.path.join(
                 out_dir, f"{img_name}-prediction.png")
@@ -63,7 +79,8 @@ def main():
             logging.error(
                 F"Failed to visualize predictions of image '{img_path}' - {ex}")
         finally:
-            plt.close(fig)
+            if fig is not None:
+                plt.close(fig)
 
 
 if __name__ == "__main__":
