@@ -24,8 +24,10 @@ MATCHED_PARTS = {
     "COFW": ([1, 2], [5, 7], [3, 4], [6, 8], [9, 10], [11, 12], [13, 15], [17, 18], [14, 16], [19, 20], [23, 24]),
     "WFLW": ([0, 32],  [1,  31], [2,  30], [3,  29], [4,  28], [5, 27], [6, 26], [7, 25], [8, 24], [9, 23], [10, 22],
              [11, 21], [12, 20], [13, 19], [14, 18], [15, 17],  # check
-             [33, 46], [34, 45], [35, 44], [36, 43], [37, 42], [38, 50], [39, 49], [40, 48], [41, 47],  # elbrow
-             [60, 72], [61, 71], [62, 70], [63, 69], [64, 68], [65, 75], [66, 74], [67, 73],
+             [33, 46], [34, 45], [35, 44], [36, 43], [37, 42], [
+                 38, 50], [39, 49], [40, 48], [41, 47],  # elbrow
+             [60, 72], [61, 71], [62, 70], [63, 69], [
+                 64, 68], [65, 75], [66, 74], [67, 73],
              [55, 59], [56, 58],
              [76, 82], [77, 81], [78, 80], [87, 83], [86, 84],
              [88, 92], [89, 91], [95, 93], [96, 97])}
@@ -155,7 +157,8 @@ def transform_pixel(pt, center, scale, output_size, invert=0, rot=0):
 def transform_preds(coords, center, scale, output_size):
 
     for p in range(coords.size(0)):
-        coords[p, 0:2] = torch.tensor(transform_pixel(coords[p, 0:2], center, scale, output_size, 1, 0))
+        coords[p, 0:2] = torch.tensor(transform_pixel(
+            coords[p, 0:2], center, scale, output_size, 1, 0))
     return coords
 
 
@@ -173,17 +176,19 @@ def crop(img, center, scale, output_size, rot=0):
         new_wd = int(np.math.floor(wd / sf))
         if new_size < 2:
             return torch.zeros(output_size[0], output_size[1], img.shape[2]) \
-                        if len(img.shape) > 2 else torch.zeros(output_size[0], output_size[1])
+                if len(img.shape) > 2 else torch.zeros(output_size[0], output_size[1])
         else:
-            img = scipy.misc.imresize(img, [new_ht, new_wd])  # (0-1)-->(0-255)
+            img = cv2.resize(img, (new_wd, new_ht))  # (0-1)-->(0-255)
             center_new[0] = center_new[0] * 1.0 / sf
             center_new[1] = center_new[1] * 1.0 / sf
             scale = scale / sf
 
     # Upper left point
-    ul = np.array(transform_pixel([0, 0], center_new, scale, output_size, invert=1))
+    ul = np.array(transform_pixel(
+        [0, 0], center_new, scale, output_size, invert=1))
     # Bottom right point
-    br = np.array(transform_pixel(output_size, center_new, scale, output_size, invert=1))
+    br = np.array(transform_pixel(
+        output_size, center_new, scale, output_size, invert=1))
 
     # Padding so that when rotated proper amount of context is included
     pad = int(np.linalg.norm(br - ul) / 2 - float(br[1] - ul[1]) / 2)
@@ -203,13 +208,14 @@ def crop(img, center, scale, output_size, rot=0):
     # Range to sample from original image
     old_x = max(0, ul[0]), min(len(img[0]), br[0])
     old_y = max(0, ul[1]), min(len(img), br[1])
-    new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]] = img[old_y[0]:old_y[1], old_x[0]:old_x[1]]
+    new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]
+            ] = img[old_y[0]:old_y[1], old_x[0]:old_x[1]]
 
     if not rot == 0:
         # Remove padding
         new_img = scipy.misc.imrotate(new_img, rot)
         new_img = new_img[pad:-pad, pad:-pad]
-    new_img = scipy.misc.imresize(new_img, output_size)
+    new_img = cv2.resize(new_img, tuple(reversed(output_size)))
     return new_img
 
 
@@ -243,7 +249,3 @@ def generate_target(img, pt, sigma, label_type='Gaussian'):
 
     img[img_y[0]:img_y[1], img_x[0]:img_x[1]] = g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
     return img
-
-
-
-

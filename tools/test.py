@@ -7,13 +7,16 @@
 import os
 import pprint
 import argparse
+import sys
+
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))  # nopep8
 import lib.models as models
 from lib.config import config, update_config
 from lib.utils import utils
@@ -27,7 +30,8 @@ def parse_args():
 
     parser.add_argument('--cfg', help='experiment configuration filename',
                         required=True, type=str)
-    parser.add_argument('--model-file', help='model parameters', required=True, type=str)
+    parser.add_argument(
+        '--model-file', help='model parameters', required=True, type=str)
 
     args = parser.parse_args()
     update_config(config, args)
@@ -57,11 +61,22 @@ def main():
     model = nn.DataParallel(model, device_ids=gpus).cuda()
 
     # load model
-    state_dict = torch.load(args.model_file)
+    state_dict: OrderedDict = torch.load(args.model_file, weights_only=True)
+
     if 'state_dict' in state_dict.keys():
         state_dict = state_dict['state_dict']
         model.load_state_dict(state_dict)
     else:
+        # remove "module." from state_dict's keys
+        new_state_dict = OrderedDict()
+        for key, val in state_dict.items():
+            if str.startswith(key, "module."):
+                new_state_dict[key[7:]] = val
+            else:
+                new_state_dict[key] = val
+        state_dict = new_state_dict
+        del new_state_dict
+
         model.module.load_state_dict(state_dict)
 
     dataset_type = get_dataset(config)
@@ -75,11 +90,10 @@ def main():
         pin_memory=config.PIN_MEMORY
     )
 
-    nme, predictions = function.inference(config, test_loader, model)
+    _, predictions = function.inference(config, test_loader, model)
 
     torch.save(predictions, os.path.join(final_output_dir, 'predictions.pth'))
 
 
 if __name__ == '__main__':
     main()
-
