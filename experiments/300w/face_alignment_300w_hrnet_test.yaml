@@ -16,8 +16,8 @@ MODEL:
   PRETRAINED: ""
   SIGMA: 1.0
   IMAGE_SIZE:
-    - 256 # H
     - 256 # W
+    - 256 # H
   HEATMAP_SIZE:
     - 64
     - 64

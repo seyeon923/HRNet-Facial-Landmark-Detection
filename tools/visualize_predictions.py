@@ -58,7 +58,7 @@ def main():
                 ax.imshow(img, cmap="gray")
             else:
                 ax.imshow(img)
-            ax.scatter(pred[:, 0], pred[:, 1], c="green", marker=".")
+            ax.scatter(pred[:, 0], pred[:, 1], c="green", marker=".", s=10)
 
             w = 200 * scale
             h = 200 * scale

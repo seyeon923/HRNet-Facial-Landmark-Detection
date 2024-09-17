@@ -21,12 +21,12 @@ def get_preds(scores):
     maxval, idx = torch.max(scores.view(scores.size(0), scores.size(1), -1), 2)
 
     maxval = maxval.view(scores.size(0), scores.size(1), 1)
-    idx = idx.view(scores.size(0), scores.size(1), 1) + 1
+    idx = idx.view(scores.size(0), scores.size(1), 1)
 
     preds = idx.repeat(1, 1, 2).float()
 
-    preds[:, :, 0] = (preds[:, :, 0] - 1) % scores.size(3) + 1
-    preds[:, :, 1] = torch.floor((preds[:, :, 1] - 1) / scores.size(3)) + 1
+    preds[:, :, 0] = (preds[:, :, 0]) % scores.size(3)
+    preds[:, :, 1] = torch.floor((preds[:, :, 1]) / scores.size(3))
 
     pred_mask = maxval.gt(0).repeat(1, 1, 2).float()
     preds *= pred_mask
@@ -56,32 +56,31 @@ def compute_nme(preds, meta):
             interocular = np.linalg.norm(pts_gt[60, ] - pts_gt[72, ])
         else:
             raise ValueError('Number of landmarks is wrong')
-        rmse[i] = np.sum(np.linalg.norm(pts_pred - pts_gt, axis=1)) / (interocular * L)
+        rmse[i] = np.sum(np.linalg.norm(
+            pts_pred - pts_gt, axis=1)) / (interocular * L)
 
     return rmse
 
 
 def decode_preds(output, center, scale, res):
-    coords = get_preds(output)  # float type
+    preds = get_preds(output)  # float type
 
-    coords = coords.cpu()
+    preds = preds.cpu()
     # pose-processing
-    for n in range(coords.size(0)):
-        for p in range(coords.size(1)):
-            hm = output[n][p]
-            px = int(math.floor(coords[n][p][0]))
-            py = int(math.floor(coords[n][p][1]))
-            if (px > 1) and (px < res[0]) and (py > 1) and (py < res[1]):
-                diff = torch.Tensor([hm[py - 1][px] - hm[py - 1][px - 2], hm[py][px - 1]-hm[py - 2][px - 1]])
-                coords[n][p] += diff.sign() * .25
-    coords += 0.5
-    preds = coords.clone()
+    for n in range(preds.size(0)):
+        for p in range(preds.size(1)):
+            hm = output[n, p, :]
+            assert hm.shape == (res[1], res[0])
+
+            px = round(preds[n, p, 0].item())
+            py = round(preds[n, p, 1].item())
+            if (px > 0) and (px < res[0] - 1) and (py > 0) and (py < res[1] - 1):
+                diff = torch.Tensor(
+                    [hm[py][px + 1] - hm[py][px - 1], hm[py + 1][px] - hm[py - 1][px]])
+                preds[n, p] += diff.sign() * .25
 
     # Transform back
-    for i in range(coords.size(0)):
-        preds[i] = transform_preds(coords[i], center[i], scale[i], res)
-
-    if preds.dim() < 3:
-        preds = preds.view(1, preds.size())
+    for i in range(preds.size(0)):
+        preds[i, :] = transform_preds(preds[i], center[i], scale[i], res)
 
     return preds

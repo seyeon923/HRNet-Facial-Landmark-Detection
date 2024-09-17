@@ -70,64 +70,27 @@ def get_dir(src_point, rot_rad):
     return src_result
 
 
-def get_affine_transform(
-        center, scale, rot, output_size,
-        shift=np.array([0, 0], dtype=np.float32), inv=0):
-    if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
-        print(scale)
-        scale = np.array([scale, scale])
-
-    scale_tmp = scale * 200.0
-    src_w = scale_tmp[0]
-    dst_w = output_size[0]
-    dst_h = output_size[1]
-
-    rot_rad = np.pi * rot / 180
-    src_dir = get_dir([0, src_w * -0.5], rot_rad)
-    dst_dir = np.array([0, dst_w * -0.5], np.float32)
-
-    src = np.zeros((3, 2), dtype=np.float32)
-    dst = np.zeros((3, 2), dtype=np.float32)
-    src[0, :] = center + scale_tmp * shift
-    src[1, :] = center + src_dir + scale_tmp * shift
-    dst[0, :] = [dst_w * 0.5, dst_h * 0.5]
-    dst[1, :] = np.array([dst_w * 0.5, dst_h * 0.5]) + dst_dir
-
-    src[2:, :] = get_3rd_point(src[0, :], src[1, :])
-    dst[2:, :] = get_3rd_point(dst[0, :], dst[1, :])
-
-    if inv:
-        trans = cv2.getAffineTransform(np.float32(dst), np.float32(src))
-    else:
-        trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
-
-    return trans
-
-
-def crop_v2(img, center, scale, output_size, rot=0):
-    trans = get_affine_transform(center, scale, rot, output_size)
-
-    dst_img = cv2.warpAffine(
-        img, trans, (int(output_size[0]), int(output_size[1])),
-        flags=cv2.INTER_LINEAR
-    )
-
-    return dst_img
-
-
-def get_transform(center, scale, output_size, rot=0):
+def get_transform(center: tuple[float, float], scale: float,
+                  output_size: tuple[int, int], rot: float = 0):
     """
     General image processing functions
+
+    - `center`: (x, y)
+    - `output_size`: (w, h)
+    - `rot`: angle in degree
     """
     # Generate transformation matrix
     h = 200 * scale
+    target_cx = (output_size[0] - 1) / 2
+    target_cy = (output_size[1] - 1) / 2
+
     t = np.zeros((3, 3))
-    t[0, 0] = float(output_size[1]) / h
-    t[1, 1] = float(output_size[0]) / h
-    t[0, 2] = output_size[1] * (-float(center[0]) / h + .5)
-    t[1, 2] = output_size[0] * (-float(center[1]) / h + .5)
+    t[0, 0] = output_size[0] / h
+    t[1, 1] = output_size[1] / h
+    t[0, 2] = -output_size[0] / h * center[0] + target_cx
+    t[1, 2] = -output_size[1] / h * center[1] + target_cy
     t[2, 2] = 1
-    if not rot == 0:
+    if rot != 0:
         rot = -rot  # To match direction of rotation from cropping
         rot_mat = np.zeros((3, 3))
         rot_rad = rot * np.pi / 180
@@ -137,89 +100,102 @@ def get_transform(center, scale, output_size, rot=0):
         rot_mat[2, 2] = 1
         # Need to rotate around center
         t_mat = np.eye(3)
-        t_mat[0, 2] = -output_size[1]/2
-        t_mat[1, 2] = -output_size[0]/2
+        t_mat[0, 2] = -target_cx
+        t_mat[1, 2] = -target_cy
         t_inv = t_mat.copy()
         t_inv[:2, 2] *= -1
         t = np.dot(t_inv, np.dot(rot_mat, np.dot(t_mat, t)))
     return t
 
 
-def transform_pixel(pt, center, scale, output_size, invert=0, rot=0):
+def transform_pixel(pt: tuple[float, float] | np.ndarray, center: tuple[float, float],
+                    scale: float, output_size: tuple[int, int],
+                    invert: bool = False, rot: float = 0):
+    """
+    - `pt`: (x, y)
+    - `center`: (x, y)
+    - `output_size`: (w, h)
+    - `rot`: angle in degree
+    """
     # Transform pixel location to different reference
     t = get_transform(center, scale, output_size, rot=rot)
     if invert:
         t = np.linalg.inv(t)
-    new_pt = np.array([pt[0] - 1, pt[1] - 1, 1.]).T
-    new_pt = np.dot(t, new_pt)
-    return new_pt[:2].astype(int) + 1
+
+    if not isinstance(pt, np.ndarray):
+        pt = np.array(pt)
+
+    if len(pt.shape) == 1:
+        pt = pt[np.newaxis, :]
+
+    new_pt = np.ones((len(pt), 3))
+    new_pt[:, :2] = pt
+    new_pt = np.dot(t, new_pt.T)
+    return np.rint(np.squeeze(new_pt[:2, :])).astype(np.int64).T
 
 
 def transform_preds(coords, center, scale, output_size):
-
-    for p in range(coords.size(0)):
-        coords[p, 0:2] = torch.tensor(transform_pixel(
-            coords[p, 0:2], center, scale, output_size, 1, 0))
-    return coords
+    return torch.tensor(transform_pixel(
+        coords, center, scale, output_size, invert=True))
 
 
-def crop(img, center, scale, output_size, rot=0):
-    center_new = center.clone()
+def crop(img: np.ndarray, center: tuple[float, float], scale: float,
+         output_size: tuple[int, int], rot: float = 0):
+    """
+    `center`: (x, y)
+    `output_size`: (w, h)
+    """
+    cx, cy = center[0], center[1]
 
     # Preprocessing for efficient cropping
-    ht, wd = img.shape[0], img.shape[1]
-    sf = scale * 200.0 / output_size[0]
+    h, w = img.shape[0], img.shape[1]
+    sf = scale * 200.0 / output_size[1]
     if sf < 2:
         sf = 1
     else:
-        new_size = int(np.math.floor(max(ht, wd) / sf))
-        new_ht = int(np.math.floor(ht / sf))
-        new_wd = int(np.math.floor(wd / sf))
+        new_size = int(np.floor(max(h, w) / sf))
+        h = int(np.floor(h / sf))
+        w = int(np.floor(w / sf))
         if new_size < 2:
-            return torch.zeros(output_size[0], output_size[1], img.shape[2]) \
-                if len(img.shape) > 2 else torch.zeros(output_size[0], output_size[1])
+            return torch.zeros(output_size[1], output_size[0], img.shape[2]) \
+                if len(img.shape) > 2 else torch.zeros(output_size[1], output_size[0])
         else:
-            img = cv2.resize(img, (new_wd, new_ht))  # (0-1)-->(0-255)
-            center_new[0] = center_new[0] * 1.0 / sf
-            center_new[1] = center_new[1] * 1.0 / sf
+            img = cv2.resize(img, (w, h))  # (0-1)-->(0-255)
+            cx = (cx + 1) / sf - 1
+            cy = (cy + 1) / sf - 1
             scale = scale / sf
 
     # Upper left point
     ul = np.array(transform_pixel(
-        [0, 0], center_new, scale, output_size, invert=1))
+        [0, 0], (cx, cy), scale, output_size, invert=True))
     # Bottom right point
     br = np.array(transform_pixel(
-        output_size, center_new, scale, output_size, invert=1))
+        output_size, (cx, cy), scale, output_size, invert=True))
 
-    # Padding so that when rotated proper amount of context is included
-    pad = int(np.linalg.norm(br - ul) / 2 - float(br[1] - ul[1]) / 2)
-    if not rot == 0:
-        ul -= pad
-        br += pad
+    # padding for in case of ul or br is out of range
+    pad = max([0, -ul[0], -ul[1], -br[0], -br[1],
+              ul[0] - w, ul[1] - h, br[0] - w, br[1] - h])
 
-    new_shape = [br[1] - ul[1], br[0] - ul[0]]
-    if len(img.shape) > 2:
-        new_shape += [img.shape[2]]
+    if rot != 0:
+        # Padding so that when rotated proper amount of context is included
+        pad = max(pad, int(np.ceil(np.linalg.norm(
+            br - ul) / 2 - float(br[1] - ul[1]) / 2)))
 
-    new_img = np.zeros(new_shape, dtype=np.float32)
+    padded_img = cv2.copyMakeBorder(
+        img, pad, pad, pad, pad, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, value=0)
 
-    # Range to fill new array
-    new_x = max(0, -ul[0]), min(br[0], len(img[0])) - ul[0]
-    new_y = max(0, -ul[1]), min(br[1], len(img)) - ul[1]
-    # Range to sample from original image
-    old_x = max(0, ul[0]), min(len(img[0]), br[0])
-    old_y = max(0, ul[1]), min(len(img), br[1])
-    new_img[new_y[0]:new_y[1], new_x[0]:new_x[1]
-            ] = img[old_y[0]:old_y[1], old_x[0]:old_x[1]]
-
-    if not rot == 0:
+    if rot != 0:
         # Remove padding
-        new_img = cv2.warpAffine(new_img,
-                                 cv2.getRotationMatrix2D(
-                                     (new_shape[1] / 2, new_shape[0] / 2), rot, 1),
-                                 (new_shape[1], new_shape[0]))
-        new_img = new_img[pad:-pad, pad:-pad]
-    new_img = cv2.resize(new_img, tuple(reversed(output_size)))
+        padded_img = cv2.warpAffine(padded_img,
+                                    cv2.getRotationMatrix2D(
+                                        ((ul[0] + br[0] + 2 * pad - 1) / 2,
+                                         (ul[1] + br[1] + 2 * pad - 1) / 2), rot, 1),
+                                    (padded_img.shape[1], padded_img.shape[0]))
+
+    new_img = padded_img[ul[1] + pad: br[1] +
+                         pad, ul[0] + pad: br[0] + pad]
+
+    new_img = cv2.resize(new_img, output_size)
     return new_img
 
 
