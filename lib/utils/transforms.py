@@ -213,7 +213,10 @@ def crop(img, center, scale, output_size, rot=0):
 
     if not rot == 0:
         # Remove padding
-        new_img = scipy.misc.imrotate(new_img, rot)
+        new_img = cv2.warpAffine(new_img,
+                                 cv2.getRotationMatrix2D(
+                                     (new_shape[1] / 2, new_shape[0] / 2), rot, 1),
+                                 (new_shape[1], new_shape[0]))
         new_img = new_img[pad:-pad, pad:-pad]
     new_img = cv2.resize(new_img, tuple(reversed(output_size)))
     return new_img

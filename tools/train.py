@@ -12,10 +12,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data import DataLoader
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))  # nopep8
 import lib.models as models
 from lib.config import config, update_config
 from lib.datasets import get_dataset
@@ -111,10 +111,9 @@ def main():
     )
 
     for epoch in range(last_epoch, config.TRAIN.END_EPOCH):
-        lr_scheduler.step()
-
         function.train(config, train_loader, model, criterion,
                        optimizer, epoch, writer_dict)
+        lr_scheduler.step()
 
         # evaluate
         nme, predictions = function.validate(config, val_loader, model,
@@ -142,13 +141,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
-
-
-
-
-
