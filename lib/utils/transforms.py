@@ -5,6 +5,7 @@
 # ------------------------------------------------------------------------------
 
 import cv2
+import scipy.signal
 import torch
 import scipy
 import scipy.misc
@@ -223,32 +224,36 @@ def crop(img, center, scale, output_size, rot=0):
 
 
 def generate_target(img, pt, sigma, label_type='Gaussian'):
-    # Check that any part of the gaussian is in-bounds
-    tmp_size = sigma * 3
-    ul = [int(pt[0] - tmp_size), int(pt[1] - tmp_size)]
-    br = [int(pt[0] + tmp_size + 1), int(pt[1] + tmp_size + 1)]
-    if (ul[0] >= img.shape[1] or ul[1] >= img.shape[0] or
-            br[0] < 0 or br[1] < 0):
-        # If not, just return the image as is
-        return img
+    x, y = pt
+    x = round(x)
+    y = round(y)
 
     # Generate gaussian
+    tmp_size = int(np.ceil(sigma * 3))
     size = 2 * tmp_size + 1
-    x = np.arange(0, size, 1, np.float32)
-    y = x[:, np.newaxis]
     x0 = y0 = size // 2
     # The gaussian is not normalized, we want the center value to equal 1
     if label_type == 'Gaussian':
-        g = np.exp(- ((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma ** 2))
+        k = np.zeros((size, size))
+        k[y0, x0] = 1
+        k = cv2.GaussianBlur(k, (size, size), sigma)
+        k /= k[y0, x0]
     else:
-        g = sigma / (((x - x0) ** 2 + (y - y0) ** 2 + sigma ** 2) ** 1.5)
+        xs = np.arange(0, size, 1, np.float32)
+        ys = xs[:, np.newaxis]
+        k = sigma / (((xs - x0) ** 2 + (ys - y0) ** 2 + sigma ** 2) ** 1.5)
 
-    # Usable gaussian range
-    g_x = max(0, -ul[0]), min(br[0], img.shape[1]) - ul[0]
-    g_y = max(0, -ul[1]), min(br[1], img.shape[0]) - ul[1]
-    # Image range
-    img_x = max(0, ul[0]), min(br[0], img.shape[1])
-    img_y = max(0, ul[1]), min(br[1], img.shape[0])
+    img[:] = 0
+    padded_img = cv2.copyMakeBorder(
+        img, y0, y0, x0, x0, cv2.BORDER_CONSTANT | cv2.BORDER_ISOLATED, value=0)
+    new_x = x + x0
+    new_y = y + y0
 
-    img[img_y[0]:img_y[1], img_x[0]:img_x[1]] = g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
+    if new_x < 0 or new_x >= padded_img.shape[1] or new_y < 0 or new_y >= padded_img.shape[0]:
+        return img
+
+    padded_img[new_y, new_x] = 1
+
+    img = scipy.signal.convolve2d(padded_img, k, "valid")
+
     return img
