@@ -27,6 +27,7 @@ pytz==2024.2
 PyYAML==6.0.2
 scipy==1.14.1
 setuptools==70.0.0
+-e .
 six==1.16.0
 sympy==1.12
 tensorboard==2.17.1

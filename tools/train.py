@@ -14,13 +14,12 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard.writer import SummaryWriter
 from torch.utils.data import DataLoader
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))  # nopep8
-import lib.models as models
-from lib.config import config, update_config
-from lib.datasets import get_dataset
-from lib.core import function
-from lib.utils import utils
+
+import seyeon.hrnet_facial_landmark_detection.models as models
+from seyeon.hrnet_facial_landmark_detection.config import config, update_config
+from seyeon.hrnet_facial_landmark_detection.datasets import get_dataset
+from seyeon.hrnet_facial_landmark_detection.core import function
+from seyeon.hrnet_facial_landmark_detection.utils import utils
 
 
 def parse_args():

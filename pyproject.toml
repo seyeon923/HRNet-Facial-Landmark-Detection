@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "seyeon_hrnet_facial_landmark_detection"
+dynamic = ["version"]
+authors = [
+  { name="Kim Se-yeon", email="tpdussla93@gmail.com" },
+]
+description = "High-resolution networks(HRNets) for facial landmark detection"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "torch",
+  "torchvision",
+  "torchaudio",
+  "hdf5storage",
+  "scipy",
+  "tensorboard",
+  "opencv-python",
+  "pandas",
+  "tqdm",
+  "matplotlib",
+  "pillow"
+]
+
+[project.urls]
+Homepage = "https://github.com/seyeon923/HRNet-Facial-Landmark-Detection"
+Issues = "https://github.com/seyeon923/HRNet-Facial-Landmark-Detection/issues"
+
+[tool.hatch.version]
+path = "src/seyeon/hrnet_facial_landmark_detection/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/seyeon"]
