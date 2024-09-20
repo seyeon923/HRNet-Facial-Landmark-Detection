@@ -61,7 +61,7 @@ def main():
     model = nn.DataParallel(model, device_ids=gpus).cuda()
 
     # loss
-    criterion = torch.nn.MSELoss(size_average=True).cuda()
+    criterion = torch.nn.MSELoss().cuda()
 
     optimizer = utils.get_optimizer(config, model)
     best_nme = 100
@@ -70,7 +70,7 @@ def main():
         model_state_file = os.path.join(final_output_dir,
                                         'latest.pth')
         if os.path.islink(model_state_file):
-            checkpoint = torch.load(model_state_file)
+            checkpoint = torch.load(model_state_file, weights_only=False)
             last_epoch = checkpoint['epoch']
             best_nme = checkpoint['best_nme']
             model.load_state_dict(checkpoint['state_dict'])
@@ -110,6 +110,7 @@ def main():
     )
 
     for epoch in range(last_epoch, config.TRAIN.END_EPOCH):
+        logger.info(f"Epoch={epoch}, LR={lr_scheduler.get_last_lr()}")
         function.train(config, train_loader, model, criterion,
                        optimizer, epoch, writer_dict)
         lr_scheduler.step()
@@ -121,14 +122,14 @@ def main():
         is_best = nme < best_nme
         best_nme = min(nme, best_nme)
 
-        logger.info('=> saving checkpoint to {}'.format(final_output_dir))
+        logger.info(f"=> saving checkpoint to '{final_output_dir}'")
         print("best:", is_best)
         utils.save_checkpoint(
-            {"state_dict": model,
+            {"state_dict": model.state_dict(),
              "epoch": epoch + 1,
              "best_nme": best_nme,
              "optimizer": optimizer.state_dict(),
-             }, predictions, is_best, final_output_dir, 'checkpoint_{}.pth'.format(epoch))
+             }, predictions, is_best, final_output_dir, f'checkpoint_{epoch}.pth')
 
     final_model_state_file = os.path.join(final_output_dir,
                                           'final_state.pth')

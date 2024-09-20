@@ -3,6 +3,7 @@
 # Licensed under the MIT License.
 # Create by Bin Xiao (Bin.Xiao@microsoft.com)
 # Modified by Tianheng Cheng(tianhengcheng@gmail.com), Yang Zhao
+# Modified by Kim Se-yeon(tpdussla93@gmail.com)
 # ------------------------------------------------------------------------------
 
 from __future__ import absolute_import
@@ -437,16 +438,19 @@ class HighResolutionNet(nn.Module):
 
         # Head Part
         height, width = x[0].size(2), x[0].size(3)
-        x1 = F.interpolate(x[1], size=(height, width), mode='bilinear', align_corners=False)
-        x2 = F.interpolate(x[2], size=(height, width), mode='bilinear', align_corners=False)
-        x3 = F.interpolate(x[3], size=(height, width), mode='bilinear', align_corners=False)
+        x1 = F.interpolate(x[1], size=(height, width),
+                           mode='bilinear', align_corners=False)
+        x2 = F.interpolate(x[2], size=(height, width),
+                           mode='bilinear', align_corners=False)
+        x3 = F.interpolate(x[3], size=(height, width),
+                           mode='bilinear', align_corners=False)
         x = torch.cat([x[0], x1, x2, x3], 1)
         x = self.head(x)
 
         return x
 
     def init_weights(self, pretrained=''):
-        logger.info('=> init weights from normal distribution')
+        logger.info('Init weights from normal distribution')
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -457,13 +461,13 @@ class HighResolutionNet(nn.Module):
                 nn.init.constant_(m.bias, 0)
         if os.path.isfile(pretrained):
             pretrained_dict = torch.load(pretrained)
-            logger.info('=> loading pretrained model {}'.format(pretrained))
+            logger.info(f"Loading pretrained model '{pretrained}'")
             model_dict = self.state_dict()
             pretrained_dict = {k: v for k, v in pretrained_dict.items()
                                if k in model_dict.keys()}
             for k, _ in pretrained_dict.items():
                 logger.info(
-                    '=> loading {} pretrained model {}'.format(k, pretrained))
+                    f"Loading '{k}' from the pretrained model '{pretrained}'")
             model_dict.update(pretrained_dict)
             self.load_state_dict(model_dict)
 
@@ -475,4 +479,3 @@ def get_face_alignment_net(config, **kwargs):
     model.init_weights(pretrained=pretrained)
 
     return model
-

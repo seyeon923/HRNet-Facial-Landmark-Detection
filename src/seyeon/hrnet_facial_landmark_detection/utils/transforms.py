@@ -2,6 +2,7 @@
 # Copyright (c) Microsoft
 # Licensed under the MIT License.
 # Created by Tianheng Cheng(tianhengcheng@gmail.com), Yang Zhao
+# Modified by Kim Se-yeon(tpdussla93@gmail.com)
 # ------------------------------------------------------------------------------
 
 import cv2
