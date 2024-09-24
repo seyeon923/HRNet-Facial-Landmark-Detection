@@ -200,7 +200,7 @@ def crop(img: np.ndarray, center: tuple[float, float], scale: float,
     return new_img
 
 
-def generate_target(img, pt, sigma, label_type='Gaussian'):
+def generate_target(img, pt, sigma, label_type='gaussian'):
     x, y = pt
     x = round(x)
     y = round(y)
@@ -210,7 +210,7 @@ def generate_target(img, pt, sigma, label_type='Gaussian'):
     size = 2 * tmp_size + 1
     x0 = y0 = size // 2
     # The gaussian is not normalized, we want the center value to equal 1
-    if label_type == 'Gaussian':
+    if label_type.upper() == 'GAUSSIAN':
         k = np.zeros((size, size))
         k[y0, x0] = 1
         k = cv2.GaussianBlur(k, (size, size), sigma)

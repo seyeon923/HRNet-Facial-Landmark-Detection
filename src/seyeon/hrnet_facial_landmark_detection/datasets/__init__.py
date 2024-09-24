@@ -8,8 +8,9 @@ from .aflw import AFLW
 from .cofw import COFW
 from .face300w import Face300W
 from .wflw import WFLW
+from .aligned import Aligned
 
-__all__ = ['AFLW', 'COFW', 'Face300W', 'WFLW', 'get_dataset']
+__all__ = ['AFLW', 'COFW', 'Face300W', 'WFLW', 'get_dataset', 'Aligned']
 
 
 def get_dataset(config):
@@ -24,4 +25,3 @@ def get_dataset(config):
         return WFLW
     else:
         raise NotImplemented()
-
