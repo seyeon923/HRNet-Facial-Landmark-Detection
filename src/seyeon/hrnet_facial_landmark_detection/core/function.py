@@ -94,8 +94,8 @@ def train(train_loader, model, critertion, optimizer, epoch, writer_dict):
         writer.add_scalar('train_loss', losses.val, epoch)
 
     nme = nme_batch_sum / nme_count
-    logger.info(f"Train Epoch {epoch}, batch time: {batch_time.avg:.4f}, data time: {
-                data_time.avg:.4f}, loss: {losses.avg:.4f}, nme: {nme:.4f}")
+    logger.info(
+        f"Train Epoch {epoch}, batch time: {batch_time.avg:.4f}, data time: {data_time.avg:.4f}, loss: {losses.avg:.4f}, nme: {nme:.4f}")
 
 
 def validate(config, val_loader, model, criterion, epoch, writer_dict):
