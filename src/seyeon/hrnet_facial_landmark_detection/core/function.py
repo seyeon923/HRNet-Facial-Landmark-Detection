@@ -2,17 +2,16 @@
 # Copyright (c) Microsoft
 # Licensed under the MIT License.
 # Created by Tianheng Cheng(tianhengcheng@gmail.com)
+# Modified by Kim Se-yeon(tpdussla93@gmail.com)
 # ------------------------------------------------------------------------------
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import time
 import logging
 
 import torch
 import numpy as np
+
+from tqdm import tqdm
 
 from .evaluation import decode_preds, compute_nme
 
@@ -21,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.val = 0
         self.avg = 0
@@ -41,11 +41,9 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def train(config, train_loader, model, critertion, optimizer,
-          epoch, writer_dict):
-
-    batch_time = AverageMeter()
+def train(train_loader, model, critertion, optimizer, epoch, writer_dict):
     data_time = AverageMeter()
+    batch_time = AverageMeter()
     losses = AverageMeter()
 
     model.train()
@@ -54,54 +52,50 @@ def train(config, train_loader, model, critertion, optimizer,
 
     end = time.time()
 
-    for i, (inp, target, meta) in enumerate(train_loader):
-        # measure data time
-        data_time.update(time.time()-end)
+    with tqdm(train_loader) as pbar:
+        for inp, target, meta in pbar:
+            # measure data time
+            data_time.update(time.time()-end)
 
-        # compute the output
-        output = model(inp)
-        target = target.cuda(non_blocking=True)
+            # compute the output
+            output = model(inp)
+            target = target.cuda(non_blocking=True)
 
-        loss = critertion(output, target)
+            loss = critertion(output, target)
 
-        # NME
-        score_map = output.data.cpu()
-        preds = decode_preds(score_map, meta['center'], meta['scale'], [64, 64])
+            # NME
+            score_map = output.data.cpu()
+            preds = decode_preds(
+                score_map, meta['center'], meta['scale'], target.shape[2:])
 
-        nme_batch = compute_nme(preds, meta)
-        nme_batch_sum = nme_batch_sum + np.sum(nme_batch)
-        nme_count = nme_count + preds.size(0)
+            nme_batch = compute_nme(preds, meta)
+            nme_batch_sum += np.sum(nme_batch)
+            nme_count += preds.size(0)
 
-        # optimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            # optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-        losses.update(loss.item(), inp.size(0))
+            losses.update(loss.item(), inp.size(0))
 
-        batch_time.update(time.time()-end)
-        if i % config.PRINT_FREQ == 0:
-            msg = 'Epoch: [{0}][{1}/{2}]\t' \
-                  'Time {batch_time.val:.3f}s ({batch_time.avg:.3f}s)\t' \
-                  'Speed {speed:.1f} samples/s\t' \
-                  'Data {data_time.val:.3f}s ({data_time.avg:.3f}s)\t' \
-                  'Loss {loss.val:.5f} ({loss.avg:.5f})\t'.format(
-                      epoch, i, len(train_loader), batch_time=batch_time,
-                      speed=inp.size(0)/batch_time.val,
-                      data_time=data_time, loss=losses)
-            logger.info(msg)
+            pbar.set_postfix({
+                "Epoch": epoch,
+                "Data": f"{data_time.val:.4f}s ({data_time.avg:.4f}s)",
+                "Loss": f"{losses.val:4f} ({losses.avg:.4f})",
+                "NME": f"{np.mean(nme_batch):.4f} ({nme_batch_sum / nme_count:.4f})"
+            })
 
-            if writer_dict:
-                writer = writer_dict['writer']
-                global_steps = writer_dict['train_global_steps']
-                writer.add_scalar('train_loss', losses.val, global_steps)
-                writer_dict['train_global_steps'] = global_steps + 1
+            batch_time.update(time.time() - end)
+            end = time.time()
 
-        end = time.time()
+    if writer_dict:
+        writer = writer_dict['writer']
+        writer.add_scalar('train_loss', losses.val, epoch)
+
     nme = nme_batch_sum / nme_count
-    msg = 'Train Epoch {} time:{:.4f} loss:{:.4f} nme:{:.4f}'\
-        .format(epoch, batch_time.avg, losses.avg, nme)
-    logger.info(msg)
+    logger.info(f"Train Epoch {epoch}, batch time: {batch_time.avg:.4f}, data time: {
+                data_time.avg:.4f}, loss: {losses.avg:.4f}, nme: {nme:.4f}")
 
 
 def validate(config, val_loader, model, criterion, epoch, writer_dict):
@@ -122,7 +116,7 @@ def validate(config, val_loader, model, criterion, epoch, writer_dict):
     end = time.time()
 
     with torch.no_grad():
-        for i, (inp, target, meta) in enumerate(val_loader):
+        for inp, target, meta in tqdm(val_loader, total=len(val_loader), desc="Validate"):
             data_time.update(time.time() - end)
             output = model(inp)
             target = target.cuda(non_blocking=True)
@@ -131,7 +125,8 @@ def validate(config, val_loader, model, criterion, epoch, writer_dict):
             # loss
             loss = criterion(output, target)
 
-            preds = decode_preds(score_map, meta['center'], meta['scale'], [64, 64])
+            preds = decode_preds(
+                score_map, meta['center'], meta['scale'], target.shape[2:])
             # NME
             nme_temp = compute_nme(preds, meta)
             # Failure Rate under different threshold
@@ -187,11 +182,12 @@ def inference(config, data_loader, model):
     end = time.time()
 
     with torch.no_grad():
-        for i, (inp, target, meta) in enumerate(data_loader):
+        for inp, target, meta in tqdm(data_loader, desc="Inference", total=len(data_loader)):
             data_time.update(time.time() - end)
             output = model(inp)
             score_map = output.data.cpu()
-            preds = decode_preds(score_map, meta['center'], meta['scale'], [64, 64])
+            preds = decode_preds(
+                score_map, meta['center'], meta['scale'], target.shape[2:])
 
             # NME
             nme_temp = compute_nme(preds, meta)
@@ -220,6 +216,3 @@ def inference(config, data_loader, model):
     logger.info(msg)
 
     return nme, predictions
-
-
-

@@ -111,7 +111,7 @@ def main():
 
     for epoch in range(last_epoch, config.TRAIN.END_EPOCH):
         logger.info(f"Epoch={epoch}, LR={lr_scheduler.get_last_lr()}")
-        function.train(config, train_loader, model, criterion,
+        function.train(train_loader, model, criterion,
                        optimizer, epoch, writer_dict)
         lr_scheduler.step()
 
