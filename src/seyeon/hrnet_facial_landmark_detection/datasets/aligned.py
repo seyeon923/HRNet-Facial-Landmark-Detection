@@ -42,9 +42,10 @@ class Aligned(Dataset):
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_root, self.dataset.iloc[idx, 0])
 
-        img = np.array(Image.open(img_path))
-        if len(img.shape) == 2:
-            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+        with open(img_path, "rb") as f:
+            img_data = np.frombuffer(f.read(), dtype=np.uint8)
+        img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         pts = self.dataset.iloc[idx, 1:].values
         pts = pts.astype(np.float32).reshape(-1, 2)
